@@ -16,9 +16,9 @@ from trac.web.chrome import ITemplateProvider, add_notice, add_warning, add_styl
 from trac.web.href import Href
 from trac.versioncontrol import DbRepositoryProvider
 
-from svnadmin.api import SvnRepositoryProvider
+from svnadmin.api import SvnAdmin, SvnRepositoryProvider
 
-class SvnAdmin(Component):
+class SvnAdminPanel(Component):
     """Component providing svnadmin management of repositories."""
     
     implements(IAdminPanelProvider, ITemplateProvider)
@@ -34,10 +34,8 @@ class SvnAdmin(Component):
          'Default url prefix. If not empty, new repos will got url '
          '`Href(<prefix>)(<repos name>)`.')
 
-    htpasswd = Option('svnadmin', 'htpasswd_location', 'htpasswd',
-         'Htpasswd executable location')
-    passwd_path = Option('svnadmin', 'passwd_path', '',
-         'Path to file with SWV users (AuthUserFile)')
+    def __init__(self):
+        self.svnadmin = SvnAdmin(self.env)
 
     # IAdminPanelProvider methods
     def get_admin_panels(self, req):
@@ -213,15 +211,15 @@ class SvnAdmin(Component):
         if req.method == 'POST':
             username = req.args.get('username')
             if not username:
-                add_warning(req, 'Username can not be empty')
+                err = 'Username can not be empty'
             elif req.args.has_key('add'):
                 password = req.args.get('password')
                 if not password:
-                    add_warning(req, 'Password can not be empty')
+                    err = 'Password can not be empty'
                 else:
-                    err = self.change_password(username, password)
+                    err = self.svnadmin.set_password(username, password)
             elif req.args.has_key('del'):
-                err = self.delete_user(username)
+                err = self.svnadmin.delete_user(username)
             else:
                 err = 'Unknown action'
 
@@ -255,55 +253,6 @@ class SvnAdmin(Component):
             return False
         return True
 
-    # Public API
-
-    def change_password(self, username, password):
-        '''Change SVN user password / Add new SVN user.
-        Return None on success or error string on fail.
-        Raise exception when configuration options are empty.'''
-
-        try:
-            args = (self.htpasswd, '-b', self.passwd_path, username, password)
-            ret = subprocess.call(args)
-        except Exception, e:
-            return ('Error occurred while calling htpasswd: %s' % exception_to_unicode(e))
-
-        if ret == 0:
-            return  # success
-
-        err = self._return_code_msg(ret)
-        if err:
-            return err
-
-        return 'Error occurred while setting SVN password. Htpasswd returned %s.' % ret
-
-    def delete_user(self, username):
-        '''Delete SVN user.
-        Return None on success or error string on fail.
-        Do nothing (as success) if user doesn't exist.'''
-
-        try:
-            args = (self.htpasswd, '-D', self.passwd_path, username)
-            ret = subprocess.call(args)
-        except Exception, e:
-            return ('Error occurred while calling htpasswd: %s' % exception_to_unicode(e))
-
-        if ret == 0:
-            return  # success
-
-        err = self._return_code_msg(ret)
-        if err:
-            return err
-
-        # TODO: special cases for all return codes (see htpasswd(1) man)
-        return 'Error occurred while deleting SVN user. Htpasswd returned %s.' % ret
-
-    def _return_code_msg(self, ret):
-        '''Return error string for known error codes
-        or None for unknown.'''
-        # TODO: special cases for all return codes (see htpasswd(1) man)
-        if ret == 1:
-            return "Can't access SVN password file: %s" % self.passwd_path
 
     # ITemplateProvider methods
     def get_templates_dirs(self):

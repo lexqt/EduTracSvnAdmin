@@ -11,6 +11,66 @@ from trac.util.text import exception_to_unicode
 from trac.util.translation import _
 from trac.versioncontrol import IRepositoryProvider, RepositoryManager
 
+
+
+class SvnAdmin(Component):
+
+    htpasswd = Option('svnadmin', 'htpasswd_location', 'htpasswd',
+         'Htpasswd executable location')
+    passwd_path = Option('svnadmin', 'passwd_path', '',
+         'Path to file with SWV users (AuthUserFile)')
+
+    # Public API
+
+    def set_password(self, username, password):
+        '''Change SVN user password / Add new SVN user.
+        Return None on success or error string on fail.
+        Raise exception when configuration options are empty.'''
+
+        try:
+            args = (self.htpasswd, '-b', self.passwd_path, username, password)
+            ret = subprocess.call(args)
+        except Exception, e:
+            return ('Error occurred while calling htpasswd: %s' % exception_to_unicode(e))
+
+        if ret == 0:
+            return  # success
+
+        err = self._return_code_msg(ret)
+        if err:
+            return err
+
+        return 'Error occurred while setting SVN password. Htpasswd returned %s.' % ret
+
+    def delete_user(self, username):
+        '''Delete SVN user.
+        Return None on success or error string on fail.
+        Do nothing (as success) if user doesn't exist.'''
+
+        try:
+            args = (self.htpasswd, '-D', self.passwd_path, username)
+            ret = subprocess.call(args)
+        except Exception, e:
+            return ('Error occurred while calling htpasswd: %s' % exception_to_unicode(e))
+
+        if ret == 0:
+            return  # success
+
+        err = self._return_code_msg(ret)
+        if err:
+            return err
+
+        # TODO: special cases for all return codes (see htpasswd(1) man)
+        return 'Error occurred while deleting SVN user. Htpasswd returned %s.' % ret
+
+    def _return_code_msg(self, ret):
+        '''Return error string for known error codes
+        or None for unknown.'''
+        # TODO: special cases for all return codes (see htpasswd(1) man)
+        if ret == 1:
+            return "Can't access SVN password file: %s" % self.passwd_path
+
+
 class SvnRepositoryProvider(Component):
     """Component providing repositories registered in the SVN parent directory."""
 
