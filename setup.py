@@ -4,10 +4,13 @@ from setuptools import setup, find_packages
 
 setup(
     name = 'EduTracSVNAdmin', 
-    version = '0.2.4',
+    version = '0.2.5',
     description = 'SVNAdmin for EduTrac',
     long_description = """
-		Use the SVNAdmin plugin to administer Subversion repositories.
+		SVNAdmin plugin provides API and administration panels to
+		manage Subversion repositories and users.
+		Also plugin provides AccountManager listener for user data
+		replication into SVN password file.
 	""",
     author = 'Evolonix, Aleksey A. Porfirov',
     author_email = 'lexqt@yandex.ru',
@@ -24,6 +27,7 @@ setup(
     packages = find_packages(exclude=['*.tests*']),
     entry_points = """
         [trac.plugins]
+        svnadmin.acct_mgr_listener = svnadmin.acct_mgr_listener
         svnadmin.admin = svnadmin.admin
         svnadmin.api = svnadmin.api
     """,
