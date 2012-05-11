@@ -16,9 +16,9 @@ class SvnRepositoryProvider(Component):
 
     implements(IRepositoryProvider)
     
-    svnadmin = Option('svnadmin', 'svnadmin_location', '',
+    svnadmin = Option('svnadmin', 'svnadmin_location', 'svnadmin',
          'Subversion admin executable location')
-    svnclient = Option('svnadmin', 'svn_client_location', '',
+    svnclient = Option('svnadmin', 'svn_client_location', 'svn',
          'Subversion client executable location')
 
     parentpath = Option('svnadmin', 'parent_path', '',
