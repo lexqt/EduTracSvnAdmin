@@ -2,21 +2,16 @@
 
 from setuptools import setup, find_packages
 
-# name can be any name.  This name will be used to create .egg file.
-# name that is used in packages is the one that is used in the trac.ini file.
-# use package name as entry_points
 setup(
-    name = 'TracSVNAdmin', 
-    version = '0.2',
-    description = 'SVNAdmin for Trac',
+    name = 'EduTracSVNAdmin', 
+    version = '0.2.1',
+    description = 'SVNAdmin for EduTrac',
     long_description = """
 		Use the SVNAdmin plugin to administer Subversion repositories.
 	""",
-    author = 'Evolonix',
-    author_email = 'info@evolonix.com',
+    author = 'Evolonix, Aleksey A. Porfirov',
+    author_email = 'lexqt@yandex.ru',
     license = 'BSD',
-    url = 'http://www.evolonix.com/trac/plugins/tracsvnadmin',
-    download_url = 'http://www.evolonix.com/trac/plugins/tracsvnadmin',
     classifiers = [
         'Environment :: Web Environment',
         'Framework :: Trac',
@@ -40,3 +35,13 @@ setup(
     	]
     },
 )
+
+#### AUTHORS ####
+## Author of original TracSVNAdmin:
+## Evolonix
+## info@evolonix.com
+##
+## Author of EduTrac adaptation, fixes and enhancements:
+## Aleksey A. Porfirov
+## lexqt@yandex.ru
+## github: lexqt

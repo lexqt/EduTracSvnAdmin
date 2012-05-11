@@ -1,19 +1,16 @@
 # SVNAdmin plugin
 
 import os.path
-import sys
 
 from genshi.builder import tag
 
 from trac.admin import IAdminPanelProvider
-from trac.config import ListOption
+from trac.config import ListOption, Option
 from trac.core import *
-from trac.util import *
-from trac.util import as_bool
-from trac.util.compat import any
-from trac.util.text import breakable_path, normalize_whitespace, print_table, printout
+from trac.util import is_path_below
 from trac.util.translation import _, tag_
-from trac.web.chrome import ITemplateProvider, Chrome, add_notice, add_warning, add_stylesheet
+from trac.web.chrome import ITemplateProvider, add_notice, add_warning, add_stylesheet
+from trac.web.href import Href
 from trac.versioncontrol import DbRepositoryProvider
 
 from svnadmin.api import SvnRepositoryProvider
@@ -29,6 +26,9 @@ class SvnAdmin(Component):
         directories when adding and editing repositories in the repository
         admin panel. If the list is empty, all repository directories are
         allowed. (''since 0.12.1'')""")
+    repos_url_prefix = Option('svnadmin', 'repos_url_prefix', '',
+         'Default url prefix. If not empty, new repos will got url '
+         '`Href(<prefix>)(<repos name>)`.')
 
     # IAdminPanelProvider methods
     def get_admin_panels(self, req):
@@ -50,8 +50,8 @@ class SvnAdmin(Component):
         admin = self.config.get('svnadmin', 'svnadmin_location')
         hookspath = self.config.get('svnadmin', 'hooks_path')
         
-    	if req.method == 'POST' and req.args.get('save_settings'):
-    	    parentpath = req.args.get('parentpath')
+        if req.method == 'POST' and req.args.get('save_settings'):
+            parentpath = req.args.get('parentpath')
             client = req.args.get('client')
             admin = req.args.get('admin')
             hookspath = req.args.get('hookspath')
@@ -63,12 +63,12 @@ class SvnAdmin(Component):
             self.config.save()
             add_notice(req, _('The settings have been saved.'))
         
-    	data = {
-    	    'parentpath': parentpath,
-    	    'client': client,
-    	    'admin': admin,
-    	    'hookspath': hookspath
-    	}
+        data = {
+            'parentpath': parentpath,
+            'client': client,
+            'admin': admin,
+            'hookspath': hookspath
+        }
         add_stylesheet(req, 'svnadmin/css/svnadmin.css')
         return 'config.html', data
     
@@ -96,7 +96,13 @@ class SvnAdmin(Component):
                 elif self._check_dir(req, dir):
                     try:
                         svn_provider.add_repository(name)
-                        db_provider.add_repository(name, dir, 'svn')
+                        db_provider.add_repository(name, 0, dir, 'svn')  # TODO: selectable project_id
+                        extra = {}
+                        if self.repos_url_prefix:
+                            href = Href(self.repos_url_prefix)
+                            extra['url'] = href(name)
+                        if extra:
+                            db_provider.modify_repository(name, extra)
                         add_notice(req, _('The repository "%(name)s" has been '
                                           'added.', name=name))
                         resync = tag.tt('trac-admin $ENV repository resync '
@@ -135,7 +141,7 @@ class SvnAdmin(Component):
         
         # Prepare common rendering data
         data.update({'repositories': repos})
-		
+        
         add_stylesheet(req, 'svnadmin/css/svnadmin.css')
         return 'repositories.html', data
 
@@ -144,13 +150,15 @@ class SvnAdmin(Component):
         message if not.
         """
         if not os.path.isabs(dir):
-            add_warning(req, _('The repository directory must be an absolute path.'))
+            add_warning(req, _('The repository directory must be an absolute '
+                               'path.'))
             return False
         prefixes = [os.path.join(self.env.path, prefix)
                     for prefix in self.allowed_repository_dir_prefixes]
-        if prefixes and not any(util.is_path_below(dir, prefix)
+        if prefixes and not any(is_path_below(dir, prefix)
                                 for prefix in prefixes):
-            add_warning(req, _('The repository directory must be located below one of the following directories: '
+            add_warning(req, _('The repository directory must be located '
+                               'below one of the following directories: '
                                '%(dirs)s', dirs=', '.join(prefixes)))
             return False
         return True

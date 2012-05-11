@@ -2,18 +2,13 @@
 
 import os
 import os.path
-import time
 import subprocess
 import shutil
 
-from trac.admin import AdminCommandError
-from trac.config import ListOption, Option
+from trac.config import Option, BoolOption
 from trac.core import *
-from trac.resource import IResourceManager, Resource, ResourceNotFound
-from trac.util.concurrency import threading
-from trac.util.text import printout, to_unicode
+from trac.util.text import exception_to_unicode
 from trac.util.translation import _
-from trac.web.api import IRequestFilter
 from trac.versioncontrol import IRepositoryProvider, RepositoryManager
 
 class SvnRepositoryProvider(Component):
@@ -21,13 +16,23 @@ class SvnRepositoryProvider(Component):
 
     implements(IRepositoryProvider)
     
-    def __init__(self):
-        self.parentpath = self.config.get('svnadmin', 'parent_path')
-        self.client = self.config.get('svnadmin', 'svn_client_location')
-        self.admin = self.config.get('svnadmin', 'svnadmin_location')
-        self.hookspath = self.config.get('svnadmin', 'hooks_path')
-    
-    def get_repositories(self):
+    svnadmin = Option('svnadmin', 'svnadmin_location', '',
+         'Subversion admin executable location')
+    svnclient = Option('svnadmin', 'svn_client_location', '',
+         'Subversion client executable location')
+
+    parentpath = Option('svnadmin', 'parent_path', '',
+         'Parent directory of the repositories (SVNParentPath)')
+    hookspath = Option('svnadmin', 'hooks_path', '',
+         'Path to copy hooks from')
+
+    create_base_structure = BoolOption('svnadmin', 'create_base_structure', 'false',
+         'Create base structure (trunk, branches, tags) for new repository.')
+    chmod = Option('svnadmin', 'chmod', '',
+         '`chmod` command arguments to perform on new repos. '
+         'Leave empty to do nothing.')
+
+    def get_repositories(self, project_id=None, syllabus_id=None):
         """Retrieve repositories in the SVN parent directory."""
         if not self.parentpath or not os.path.exists(self.parentpath):
             return []
@@ -36,7 +41,7 @@ class SvnRepositoryProvider(Component):
         for name in repos:
             dir = os.path.join(self.parentpath, name)
             
-            command = self.admin + ' verify "%s"' % dir
+            command = self.svnadmin + ' verify "%s"' % dir
             process = subprocess.Popen(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
             (result, error) = process.communicate()
             
@@ -60,14 +65,20 @@ class SvnRepositoryProvider(Component):
         trunk = os.path.join(dir, 'trunk')
         branches = os.path.join(dir, 'branches')
         tags = os.path.join(dir, 'tags')
-        command = '"%(svnadmin)s" create "%(dir)s"; "%(svn)s" mkdir --parents -q -m "Created Folders" "file://%(trunk)s" "file://%(branches)s" "file://%(tags)s"' % {
-            'svnadmin': self.admin,
-            'dir': dir,
-            'svn': self.client,
-            'trunk': trunk,
-            'branches': branches,
-            'tags': tags
-        }
+        command = u'"{svnadmin}" create "{dir}"'
+        if self.create_base_structure:
+            command += '; "{svn}" mkdir --parents -q -m "Created Folders" "file://{trunk}" "file://{branches}" "file://{tags}"'
+        if self.chmod:
+            command += '; chmod {chmod} "{dir}"'
+        command = command.format(
+            svnadmin=self.svnadmin,
+            dir=dir,
+            svn=self.svnclient,
+            trunk=trunk,
+            branches=branches,
+            tags=tags,
+            chmod=self.chmod,
+        )
         process = subprocess.Popen(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         (result, error) = process.communicate()
         if error is not None and error != "":
@@ -80,11 +91,11 @@ class SvnRepositoryProvider(Component):
             else:
                 raise TracError(error)
         if self.hookspath and os.path.exists(self.hookspath):
-	        hooksdir = os.path.join(dir, 'hooks/')
-	        files = os.listdir(self.hookspath)
-	        files = [self.hookspath + '/' + filename for filename in files]
-	        for file in files:
-	        	shutil.copy2(file, hooksdir)
+            hooksdir = os.path.join(dir, 'hooks/')
+            files = os.listdir(self.hookspath)
+            files = [os.path.join(self.hookspath, filename) for filename in files]
+            for f in files:
+                shutil.copy2(f, hooksdir)
         rm = RepositoryManager(self.env)
         rm.reload_repositories()
     
@@ -95,5 +106,5 @@ class SvnRepositoryProvider(Component):
             shutil.rmtree(dir)
             rm = RepositoryManager(self.env)
             rm.reload_repositories()
-        except OSError, why:
-            raise TracError(str(why))
+        except OSError, e:
+            raise TracError(exception_to_unicode(e))
