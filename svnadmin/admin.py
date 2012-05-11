@@ -1,5 +1,6 @@
 # SVNAdmin plugin
 
+import os
 import os.path
 
 from genshi.builder import tag
@@ -8,6 +9,7 @@ from trac.admin import IAdminPanelProvider
 from trac.config import ListOption, Option
 from trac.core import *
 from trac.util import is_path_below
+from trac.util.text import exception_to_unicode
 from trac.util.translation import _, tag_
 from trac.web.chrome import ITemplateProvider, add_notice, add_warning, add_stylesheet
 from trac.web.href import Href
@@ -35,7 +37,9 @@ class SvnAdmin(Component):
         if 'VERSIONCONTROL_ADMIN' in req.perm:
             yield ('svnadmin', _("SVNAdmin"), 'config', _("Configuration"))
             yield ('svnadmin', _("SVNAdmin"), 'repositories', _("Repositories"))
-    
+        if 'TRAC_ADMIN' in req.perm:
+            yield ('svnadmin', _("SVNAdmin"), 'authz_raw', _("Edit authz file"))
+
     def render_admin_panel(self, req, category, page, path_info):
         req.perm.require('VERSIONCONTROL_ADMIN')
         
@@ -43,6 +47,9 @@ class SvnAdmin(Component):
             return self._do_config(req, category, page)
         elif page == 'repositories':
             return self._do_repositories(req, category, page)
+        elif page == 'authz_raw':
+            req.perm.require('TRAC_ADMIN')
+            return self._do_authz_raw(req)
         
     def _do_config(self, req, category, page):
         parentpath = self.config.get('svnadmin', 'parent_path')
@@ -144,6 +151,52 @@ class SvnAdmin(Component):
         
         add_stylesheet(req, 'svnadmin/css/svnadmin.css')
         return 'repositories.html', data
+
+    def _do_authz_raw(self, req):
+        # get default authz file from trac.ini
+        authz_file = self.config.get('trac', 'authz_file')
+
+        # test if authz file exists and is writable
+        if not os.access(authz_file,os.W_OK|os.R_OK):
+            raise TracError("Can't access authz file %s" % authz_file)
+
+        # evaluate forms
+        if req.method == 'POST':
+            current=req.args.get('current').strip().replace('\r', '')
+
+            # encode to utf-8
+            current = current.encode('utf-8')
+
+            # parse and validate authz file with a config parser
+            from ConfigParser import ConfigParser
+            from StringIO import StringIO
+            cp = ConfigParser()
+            try:
+                cp.readfp(StringIO(current))
+            except Exception, e:
+                raise TracError("Invalid Syntax: %s" % exception_to_unicode(e))
+
+            # write to disk
+            try:
+                fp = open(authz_file, 'wb')
+                current = fp.write(current)
+                fp.close()
+            except Exception, e:
+                raise TracError("Can't write authz file: %s" % exception_to_unicode(e))
+
+            add_notice(req, _('Your changes have been saved.'))
+            req.redirect(req.panel_href())
+
+        # read current authz file
+        current = ""
+        try:
+            fp = open(authz_file,'r')
+            current = fp.read()
+            fp.close()
+        except Exception, e:
+            add_warning(req, 'Error occurred while reading authz file: %s' % exception_to_unicode(e))
+
+        return 'svnauthz_raw.html', {'auth_data':current}
 
     def _check_dir(self, req, dir):
         """Check that a repository directory is valid, and add a warning
