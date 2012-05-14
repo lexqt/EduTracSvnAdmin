@@ -21,19 +21,19 @@ class AccountManagerToSVNReplication(Component):
     def user_created(self, user, password):
         """User created"""
         res = self.svnadmin.set_password(user, password)
-        self.log.debug("AccountManagerToSVNReplication: user_created: %s, %s" % (user, res or 'OK'))
+        self.log.info("AccountManagerToSVNReplication: user_created: %s, %s" % (user, res or 'OK'))
         return res
 
     def user_password_changed(self, user, password):
         """Password changed"""
         res = self.svnadmin.set_password(user, password)
-        self.log.debug("AccountManagerToSVNReplication: user_password_changed: %s, %s" % (user, res or 'OK'))
+        self.log.info("AccountManagerToSVNReplication: user_password_changed: %s, %s" % (user, res or 'OK'))
         return res
 
     def user_deleted(self, user):
         """User deleted"""
         res = self.svnadmin.delete_user(user)
-        self.log.debug("AccountManagerToSVNReplication: user_deleted: %s" % (user, res or 'OK'))
+        self.log.info("AccountManagerToSVNReplication: user_deleted: %s, %s" % (user, res or 'OK'))
         return res
 
     def user_password_reset(self, user, email, password):
