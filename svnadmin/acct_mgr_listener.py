@@ -20,10 +20,6 @@ class AccountManagerToSVNReplication(Component):
 
     def user_created(self, user, password):
         """User created"""
-
-        if self.has_user(user):
-            return False
-
         res = self.svnadmin.set_password(user, password)
         self.log.debug("AccountManagerToSVNReplication: user_created: %s, %s" % (user, res or 'OK'))
         return res
